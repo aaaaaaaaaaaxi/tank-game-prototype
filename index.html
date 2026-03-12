@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tank Game</title>
+</head>
+<body>
+    <h1>Tank Game</h1>
+    <canvas id="gameCanvas" width="800" height="600" style="background-color: lightgray; border: 1px solid black;"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let tankX = 100;
+        let tankY = 100;
+
+        const keys = { w: false, a: false, s: false, d: false };
+        const bullets = [];
+
+        function shoot() {
+            bullets.push({
+                x: tankX + 35,
+                y: tankY - 15,
+                velocityX: 10,
+                velocityY: 0
+            });
+        }
+
+        function updateGame() {
+            if (keys.w) tankY -= 5;
+            if (keys.s) tankY += 5;
+            if (keys.a) tankX -= 5;
+            if (keys.d) tankX += 5;
+
+            tankX = Math.max(0, Math.min(canvas.width, tankX));
+            tankY = Math.max(0, Math.min(canvas.height, tankY));
+
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i];
+                b.x += b.velocityX;
+                b.y += b.velocityY;
+
+                if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
+                    bullets.splice(i, 1);
+                }
+            }
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawTank(ctx, tankX, tankY);
+
+            ctx.fillStyle = 'yellow';
+            for (const b of bullets) {
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            const k = e.key.toLowerCase();
+            if (k in keys) {
+                keys[k] = true;
+            }
+
+            if (e.code === 'Space' && !e.repeat) {
+                shoot();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            const k = e.key.toLowerCase();
+            if (k in keys) keys[k] = false;
+        });
+
+        function gameLoop() {
+            updateGame();
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function drawTank(ctx, x, y) {
+            // 1. Tank body: pink rectangle 40x20, centered at (x, y)
+            ctx.fillStyle = 'pink';
+            ctx.fillRect(x - 20, y - 10, 40, 20);
+
+            // 2. Turret: darker pink rectangle 30x10, centered on top of body
+            ctx.fillStyle = 'deeppink';
+            ctx.fillRect(x - 15, y - 20, 30, 10);
+
+            // 3. Gun barrel: thin black line 20px extending right from turret
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x + 15, y - 15);
+            ctx.lineTo(x + 35, y - 15);
+            ctx.stroke();
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
