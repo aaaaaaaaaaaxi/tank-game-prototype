@@ -14,16 +14,21 @@
 
         let tankX = 100;
         let tankY = 100;
+        let turretAngle = 0;
 
         const keys = { w: false, a: false, s: false, d: false };
         const bullets = [];
 
         function shoot() {
+            const barrelLength = 20;
+            const muzzleX = tankX + Math.cos(turretAngle) * barrelLength;
+            const muzzleY = tankY + Math.sin(turretAngle) * barrelLength;
+            const bulletSpeed = 10;
             bullets.push({
-                x: tankX + 35,
-                y: tankY - 15,
-                velocityX: 10,
-                velocityY: 0
+                x: muzzleX,
+                y: muzzleY,
+                velocityX: Math.cos(turretAngle) * bulletSpeed,
+                velocityY: Math.sin(turretAngle) * bulletSpeed
             });
         }
 
@@ -49,7 +54,7 @@
 
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawTank(ctx, tankX, tankY);
+            drawTank(ctx, tankX, tankY, turretAngle);
 
             ctx.fillStyle = 'yellow';
             for (const b of bullets) {
@@ -58,6 +63,13 @@
                 ctx.fill();
             }
         }
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            turretAngle = Math.atan2(mouseY - tankY, mouseX - tankX);
+        });
 
         window.addEventListener('keydown', (e) => {
             const k = e.key.toLowerCase();
@@ -81,22 +93,27 @@
             requestAnimationFrame(gameLoop);
         }
 
-        function drawTank(ctx, x, y) {
+        function drawTank(ctx, x, y, angle) {
             // 1. Tank body: pink rectangle 40x20, centered at (x, y)
-            ctx.fillStyle = 'green';
+            ctx.fillStyle = 'pink';
             ctx.fillRect(x - 20, y - 10, 40, 20);
 
-            // 2. Turret: darker pink rectangle 30x10, centered on top of body
-            ctx.fillStyle = 'deepgreen';
-            ctx.fillRect(x - 15, y - 20, 30, 10);
+            // 2 & 3. Turret + barrel rotate toward mouse
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(angle);
 
-            // 3. Gun barrel: thin black line 20px extending right from turret
+            ctx.fillStyle = 'deeppink';
+            ctx.fillRect(-15, -5, 30, 10);
+
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.moveTo(x + 15, y - 15);
-            ctx.lineTo(x + 35, y - 15);
+            ctx.moveTo(0, 0);
+            ctx.lineTo(20, 0);
             ctx.stroke();
+
+            ctx.restore();
         }
 
         gameLoop();
