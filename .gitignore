@@ -1,0 +1,37 @@
+########################
+# OS / system files
+########################
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+########################
+# Editor / IDE
+########################
+# VS Code / Cursor
+.vscode/
+.cursor/
+
+# JetBrains / WebStorm
+.idea/
+
+# Backup / temporary files
+*.swp
+*.swo
+*.tmp
+*.log
+*~
+
+########################
+# Dependencies / build artifacts (if added later)
+########################
+node_modules/
+dist/
+build/
