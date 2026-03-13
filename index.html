@@ -33,8 +33,17 @@
             if (keys.a) tankX -= 5;
             if (keys.d) tankX += 5;
 
-            tankX = Math.max(0, Math.min(canvas.width, tankX));
-            tankY = Math.max(0, Math.min(canvas.height, tankY));
+            // Tank current dimensions:
+            // body: 40x20 centered on (tankX, tankY) -> left 20px, right 20px, up 10px, down 10px
+            // turret: 30x10 on top -> extends 20px up from center
+            // barrel: 20px to the right from (tankX + 15, tankY - 15) -> 35px to the right from center
+            const offsetLeft = 20;
+            const offsetRight = 35;
+            const offsetTop = 20;
+            const offsetBottom = 10;
+
+            tankX = Math.max(offsetLeft, Math.min(canvas.width - offsetRight, tankX));
+            tankY = Math.max(offsetTop, Math.min(canvas.height - offsetBottom, tankY));
 
             for (let i = bullets.length - 1; i >= 0; i--) {
                 const b = bullets[i];
