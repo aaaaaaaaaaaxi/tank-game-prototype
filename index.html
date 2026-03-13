@@ -6,17 +6,45 @@
     <title>Tank Game</title>
 </head>
 <body>
-    <h1>Tank Game</h1>
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+        <h1 style="margin: 0;">Tank Game</h1>
+        <button id="startBtn">Start</button>
+        <button id="pauseBtn">Pause</button>
+        <button id="restartBtn">Restart</button>
+    </div>
     <canvas id="gameCanvas" width="800" height="600" style="background-color: lightgray; border: 1px solid black;"></canvas>
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        const startBtn = document.getElementById('startBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const restartBtn = document.getElementById('restartBtn');
 
         let tankX = 100;
         let tankY = 100;
+        let playerHealth = 10;
+        let damageCooldownFrames = 0; // invincibility frames after taking damage
+        let damageFlashFrames = 0;    // short screen flash when hit
+        let gameOver = false;         // death / game over state
+        let deathFrames = 0;          // frames to show game over effect
+        let enemyDeathFrames = 0;     // frames for enemy death effect
+        let enemyDeathX = 0;
+        let enemyDeathY = 0;
+        let isPaused = false;         // game paused / running
+        let gameStarted = false;      // game started / not started
 
         const keys = { w: false, a: false, s: false, d: false };
         const bullets = [];
+
+        // enemy state
+        let enemyActive = false;
+        const enemyWidth = 40;
+        const enemyHeight = 40;
+        let enemyX = canvas.width + enemyWidth;
+        let enemyY = canvas.height / 4;
+        let enemySpeedX = -2;
+        const enemyBullets = [];
+        let enemyShootCooldown = 120; // frames
 
         function shoot() {
             bullets.push({
@@ -27,7 +55,49 @@
             });
         }
 
+        function enemyShoot() {
+            if (!enemyActive) return;
+            const dx = tankX - enemyX;
+            const dy = tankY - enemyY;
+            const len = Math.hypot(dx, dy) || 1;
+            const speed = 4;
+            enemyBullets.push({
+                x: enemyX,
+                y: enemyY,
+                velocityX: (dx / len) * speed,
+                velocityY: (dy / len) * speed
+            });
+        }
+
         function updateGame() {
+            // don't update if game hasn't started
+            if (!gameStarted) {
+                return;
+            }
+
+            // when dead, just wait for death animation to finish
+            if (gameOver) {
+                if (deathFrames > 0) {
+                    deathFrames--;
+                } else {
+                    resetGame();
+                    gameOver = false;
+                }
+                return;
+            }
+
+            if (damageCooldownFrames > 0) {
+                damageCooldownFrames--;
+            }
+
+            if (damageFlashFrames > 0) {
+                damageFlashFrames--;
+            }
+
+            if (enemyDeathFrames > 0) {
+                enemyDeathFrames--;
+            }
+
             if (keys.w) tankY -= 5;
             if (keys.s) tankY += 5;
             if (keys.a) tankX -= 5;
@@ -54,17 +124,193 @@
                     bullets.splice(i, 1);
                 }
             }
+
+            // update enemy movement and bullets
+            if (enemyActive) {
+                enemyX += enemySpeedX;
+
+                // simple loop path from right to left, then reset to right again
+                if (enemyX < -enemyWidth) {
+                    enemyX = canvas.width + enemyWidth;
+                    // change lane a bit
+                    enemyY = 100 + Math.random() * (canvas.height - 200);
+                }
+
+                // enemy shooting cooldown
+                if (enemyShootCooldown > 0) {
+                    enemyShootCooldown--;
+                } else {
+                    enemyShoot();
+                    enemyShootCooldown = 120;
+                }
+
+                // update enemy bullets
+                for (let i = enemyBullets.length - 1; i >= 0; i--) {
+                    const eb = enemyBullets[i];
+                    eb.x += eb.velocityX;
+                    eb.y += eb.velocityY;
+
+                    if (eb.x < 0 || eb.x > canvas.width || eb.y < 0 || eb.y > canvas.height) {
+                        enemyBullets.splice(i, 1);
+                    }
+                }
+
+                // tank bounds (used for multiple collision checks)
+                const tankLeft = tankX - 20;
+                const tankRight = tankX + 35;
+                const tankTop = tankY - 20;
+                const tankBottom = tankY + 10;
+
+                // collision: tank with enemy bullets
+                if (damageCooldownFrames === 0) {
+                    for (let i = enemyBullets.length - 1; i >= 0; i--) {
+                        const eb = enemyBullets[i];
+                        if (eb.x >= tankLeft && eb.x <= tankRight && eb.y >= tankTop && eb.y <= tankBottom) {
+                            enemyBullets.splice(i, 1);
+                            loseLife();
+                            break;
+                        }
+                    }
+                }
+
+                // enemy bounds
+                const enemyLeft = enemyX - enemyWidth / 2;
+                const enemyRight = enemyX + enemyWidth / 2;
+                const enemyTop = enemyY - enemyHeight / 2;
+                const enemyBottom = enemyY + enemyHeight / 2;
+
+                // collision: player bullets with enemy
+                for (let i = bullets.length - 1; i >= 0; i--) {
+                    const b = bullets[i];
+                    if (
+                        b.x >= enemyLeft && b.x <= enemyRight &&
+                        b.y >= enemyTop && b.y <= enemyBottom
+                    ) {
+                        // remove bullet and "kill" enemy
+                        bullets.splice(i, 1);
+
+                        // enemy death visual feedback (explosion)
+                        enemyDeathFrames = 20;
+                        enemyDeathX = enemyX;
+                        enemyDeathY = enemyY;
+
+                        // immediately respawn a new enemy on the right
+                        enemyActive = true;
+                        enemyBullets.length = 0;
+                        enemyX = canvas.width + enemyWidth;
+                        enemyY = 100 + Math.random() * (canvas.height - 200);
+                        enemyShootCooldown = 60; // short delay before next shot
+                        break;
+                    }
+                }
+
+                const overlap =
+                    tankRight > enemyLeft &&
+                    tankLeft < enemyRight &&
+                    tankBottom > enemyTop &&
+                    tankTop < enemyBottom;
+
+                if (overlap && damageCooldownFrames === 0) {
+                    loseLife();
+                }
+            }
         }
 
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawTank(ctx, tankX, tankY);
+
+            // gray screen with prompt when game hasn't started
+            if (!gameStarted) {
+                ctx.save();
+                ctx.fillStyle = 'gray';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'white';
+                ctx.font = '32px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('Press the Start button to begin the game', canvas.width / 2, canvas.height / 2);
+                ctx.restore();
+                return;
+            }
+
+            drawTank(ctx, tankX, tankY, damageCooldownFrames > 0);
 
             ctx.fillStyle = 'yellow';
             for (const b of bullets) {
                 ctx.beginPath();
                 ctx.arc(b.x, b.y, 5, 0, Math.PI * 2);
                 ctx.fill();
+            }
+
+            // draw enemy
+            if (enemyActive) {
+                drawEnemy(ctx, enemyX, enemyY);
+            }
+
+            // enemy death effect (explosion ring)
+            if (enemyDeathFrames > 0) {
+                ctx.save();
+                const t = 1 - enemyDeathFrames / 20; // 0 -> 1
+                const radius = 10 + t * 30;
+                const alpha = 0.7 * (1 - t);
+                ctx.strokeStyle = `rgba(255, 165, 0, ${alpha})`; // orange
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(enemyDeathX, enemyDeathY, radius, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            // draw enemy bullets
+            ctx.fillStyle = 'red';
+            for (const eb of enemyBullets) {
+                ctx.beginPath();
+                ctx.arc(eb.x, eb.y, 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // damage flash overlay
+            if (damageFlashFrames > 0) {
+                ctx.save();
+                const alpha = Math.max(0, Math.min(0.4, damageFlashFrames / 30));
+                ctx.fillStyle = `rgba(255, 0, 0, ${alpha})`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.restore();
+            }
+
+            // draw UI (health)
+            ctx.fillStyle = 'black';
+            ctx.font = '16px Arial';
+            ctx.textBaseline = 'top';
+            ctx.fillText(`Health: ${playerHealth}`, 10, 10);
+
+            // game over visual feedback
+            if (gameOver) {
+                ctx.save();
+                // darken background
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // GAME OVER text
+                ctx.fillStyle = 'red';
+                ctx.font = '48px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2);
+                ctx.restore();
+            }
+
+            // pause overlay (only when not game over)
+            if (isPaused && !gameOver) {
+                ctx.save();
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'white';
+                ctx.font = '32px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('PAUSED - Press Start button to resume', canvas.width / 2, canvas.height / 2);
+                ctx.restore();
             }
         }
 
@@ -74,7 +320,7 @@
                 keys[k] = true;
             }
 
-            if (e.code === 'Space' && !e.repeat) {
+            if (e.code === 'Space' && !e.repeat && gameStarted && !isPaused) {
                 shoot();
             }
         });
@@ -84,13 +330,55 @@
             if (k in keys) keys[k] = false;
         });
 
+        // UI buttons: start, pause, restart
+        startBtn.addEventListener('click', () => {
+            if (!gameStarted) {
+                gameStarted = true;
+                // start enemy spawning timer
+                setTimeout(() => {
+                    enemyActive = true;
+                }, 5000);
+            } else if (gameOver) {
+                resetGame();
+                gameOver = false;
+            }
+            isPaused = false;
+        });
+
+        pauseBtn.addEventListener('click', () => {
+            if (gameStarted && !gameOver) {
+                isPaused = true;
+            }
+        });
+
+        restartBtn.addEventListener('click', () => {
+            resetGame();
+            gameOver = false;
+            isPaused = false;
+            gameStarted = true;
+            // restart enemy spawning timer
+            setTimeout(() => {
+                enemyActive = true;
+            }, 5000);
+        });
+
         function gameLoop() {
-            updateGame();
+            if (!isPaused) {
+                updateGame();
+            }
             render();
             requestAnimationFrame(gameLoop);
         }
 
-        function drawTank(ctx, x, y) {
+        function drawTank(ctx, x, y, isInvincible) {
+            ctx.save();
+
+            // visual feedback for invincibility: blinking + semi‑transparent
+            if (isInvincible) {
+                const blink = Math.floor(damageCooldownFrames / 5) % 2 === 0;
+                ctx.globalAlpha = blink ? 0.4 : 0.8;
+            }
+
             // 1. Tank body: pink rectangle 40x20, centered at (x, y)
             ctx.fillStyle = 'pink';
             ctx.fillRect(x - 20, y - 10, 40, 20);
@@ -106,6 +394,45 @@
             ctx.moveTo(x + 15, y - 15);
             ctx.lineTo(x + 35, y - 15);
             ctx.stroke();
+
+            // outline when invincible
+            if (isInvincible) {
+                ctx.strokeStyle = 'yellow';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(x - 22, y - 22, 59, 44);
+            }
+
+            ctx.restore();
+        }
+
+        function drawEnemy(ctx, x, y) {
+            ctx.fillStyle = 'green';
+            ctx.fillRect(x - enemyWidth / 2, y - enemyHeight / 2, enemyWidth, enemyHeight);
+        }
+
+        function loseLife() {
+            playerHealth -= 1;
+            damageCooldownFrames = 60; // about 1 second at 60 FPS
+            damageFlashFrames = 15;    // short red flash
+            if (playerHealth <= 0) {
+                gameOver = true;
+                deathFrames = 60; // show game over for ~1 second
+            }
+        }
+
+        function resetGame() {
+            tankX = 100;
+            tankY = 100;
+            playerHealth = 10;
+            bullets.length = 0;
+            enemyBullets.length = 0;
+            enemyActive = false;
+            enemyX = canvas.width + enemyWidth;
+            enemyY = canvas.height / 4;
+            enemyShootCooldown = 120;
+            damageCooldownFrames = 0;
+            damageFlashFrames = 0;
+            enemyDeathFrames = 0;
         }
 
         gameLoop();
